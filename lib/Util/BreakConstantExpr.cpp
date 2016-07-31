@@ -31,7 +31,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 //                          The SAFECode Compiler
 //
 // This file was developed by the LLVM research group and is distributed under
-// the University of Illinois Open Source License. See LICENSE.TXT for details.
+// GPLv3 Open Source License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
 //
@@ -208,7 +208,7 @@ convertExpression (ConstantExpr * CE, Instruction * InsertPt) {
     case Instruction:: ICmp: {
         Instruction::OtherOps Op = (Instruction::OtherOps)(CE->getOpcode());
         NewInst = CmpInst::Create (Op,
-                                   CE->getPredicate(),
+                                   static_cast<llvm::CmpInst::Predicate>(CE->getPredicate()),
                                    CE->getOperand(0),
                                    CE->getOperand(1),
                                    CE->getName(),
@@ -268,7 +268,7 @@ BreakConstantGEPs::runOnModule (Module & module) {
                 // Scan through the operands of this instruction.  If it is a constant
                 // expression GEP, insert an instruction GEP before the instruction.
                 //
-                Instruction * I = i;
+                Instruction * I = &(*i);
                 for (unsigned index = 0; index < I->getNumOperands(); ++index) {
                     if (hasConstantGEP (I->getOperand(index))) {
                         Worklist.push_back (I);

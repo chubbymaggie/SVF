@@ -2,8 +2,21 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Copyright (C) <2013-2016>  <Yulei Sui>
+// Copyright (C) <2013-2016>  <Jingling Xue>
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //===----------------------------------------------------------------------===//
 
@@ -47,10 +60,12 @@ static const ei_pair ei_pairs[]= {
     {"\01_pthread_join", ThreadAPI::TD_JOIN},
     {"pthread_cancel", ThreadAPI::TD_JOIN},
     {"pthread_mutex_lock", ThreadAPI::TD_ACQUIRE},
+    {"pthread_rwlock_rdlock", ThreadAPI::TD_ACQUIRE},
     {"sem_wait", ThreadAPI::TD_ACQUIRE},
     {"_spin_lock", ThreadAPI::TD_ACQUIRE},
     {"pthread_mutex_trylock", ThreadAPI::TD_TRY_ACQUIRE},
     {"pthread_mutex_unlock", ThreadAPI::TD_RELEASE},
+    {"pthread_rwlock_unlock", ThreadAPI::TD_RELEASE},
     {"_spin_unlock", ThreadAPI::TD_RELEASE},
     {"sem_post", ThreadAPI::TD_RELEASE},
 //    {"pthread_cancel", ThreadAPI::TD_CANCEL},

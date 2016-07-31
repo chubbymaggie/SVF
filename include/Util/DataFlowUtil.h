@@ -2,8 +2,21 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Copyright (C) <2013-2016>  <Yulei Sui>
+// Copyright (C) <2013-2016>  <Jingling Xue>
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,6 +37,77 @@
 #include <llvm/Analysis/ScalarEvolutionExpressions.h>
 
 /*!
+ * Wrapper for SCEV collected from function pass ScalarEvolution
+ */
+class PTASCEV {
+
+public:
+    PTASCEV():scev(NULL), start(NULL), step(NULL),ptr(NULL),inloop(false),tripcount(0) {}
+
+    /// Constructor
+    PTASCEV(const llvm::Value* p, const llvm::SCEV* s, llvm::ScalarEvolution* SE): scev(s),start(NULL), step(NULL), ptr(p) {
+        if(const llvm::SCEVAddRecExpr* ar = llvm::dyn_cast<llvm::SCEVAddRecExpr>(s)) {
+            if (const llvm::SCEVConstant *startExpr = llvm::dyn_cast<llvm::SCEVConstant>(ar->getStart()))
+                start = startExpr->getValue();
+            if (const llvm::SCEVConstant *stepExpr = llvm::dyn_cast<llvm::SCEVConstant>(ar->getStepRecurrence(*SE)))
+                step = stepExpr->getValue();
+            tripcount = SE->getSmallConstantTripCount(const_cast<llvm::Loop*>(ar->getLoop()));
+            inloop = true;
+        }
+    }
+    /// Copy Constructor
+    PTASCEV(const PTASCEV& ptase): scev(ptase.scev), start(ptase.start), step(ptase.step), ptr(ptase.ptr), inloop(ptase.inloop),tripcount(ptase.tripcount) {
+
+    }
+
+    /// Destructor
+    virtual ~PTASCEV() {
+    }
+
+    const llvm::SCEV *scev;
+    const llvm::Value* start;
+    const llvm::Value* step;
+    const llvm::Value *ptr;
+    bool inloop;
+    unsigned tripcount;
+
+    /// Enable compare operator to avoid duplicated item insertion in map or set
+    /// to be noted that two vectors can also overload operator()
+    inline bool operator< (const PTASCEV& rhs) const {
+        if(start!=rhs.start)
+            return start < rhs.start;
+        else if(step!=rhs.step)
+            return step < rhs.step;
+        else if(ptr!=rhs.ptr)
+            return ptr < rhs.ptr;
+        else if(tripcount!=rhs.tripcount)
+            return tripcount < rhs.tripcount;
+        else
+            return inloop < rhs.inloop;
+    }
+    /// Overloading operator=
+    inline PTASCEV& operator= (const PTASCEV& rhs) {
+        if(*this!=rhs) {
+            start = rhs.start;
+            step = rhs.step;
+            ptr = rhs.ptr;
+            tripcount = rhs.tripcount;
+            inloop = rhs.inloop;
+        }
+        return *this;
+    }
+    /// Overloading operator==
+    inline bool operator== (const PTASCEV& rhs) const {
+        return (start == rhs.start && step == rhs.step && ptr == rhs.ptr && tripcount == rhs.tripcount && inloop == rhs.inloop);
+    }
+    /// Overloading operator==
+    inline bool operator!= (const PTASCEV& rhs) const {
+        return !(*this==rhs);
+    }
+};
+
+
+/*!
  * LoopInfo used in PTA
  */
 class PTALoopInfo : public llvm::LoopInfo {
@@ -36,7 +120,7 @@ public:
         releaseMemory();
         llvm::DominatorTree dt;
         dt.recalculate(fun);
-        Analyze(dt);
+        analyze(dt);
         return false;
     }
 };
@@ -113,28 +197,6 @@ public:
             return it->second;
     }
 
-    /// Check whether two inloop scevs have same start and step
-    static bool sameStartAndStep(llvm::ScalarEvolution* SE1, const llvm::SCEV *se1, llvm::ScalarEvolution* SE2,const llvm::SCEV *se2) {
-
-        if(se1 == se2)
-            return true;
-
-        // We only handle AddRec here
-        const llvm::SCEVAddRecExpr *addRec1 = llvm::dyn_cast<llvm::SCEVAddRecExpr>(se1);
-        const llvm::SCEVAddRecExpr *addRec2 = llvm::dyn_cast<llvm::SCEVAddRecExpr>(se2);
-        if (!addRec1 || !addRec2)   return false;
-
-        // Compare the starts
-        bool sameStart = (addRec1->getStart() == addRec2->getStart());
-        if (!sameStart)     return false;
-
-        // Compare the steps
-        bool sameStep = (addRec1->getStepRecurrence(*SE1)
-                         == addRec2->getStepRecurrence(*SE2));
-        if (!sameStep)      return false;
-
-        return true;
-    }
 private:
     FunToLoopInfoMap funToLoopInfoMap;		///< map a function to its loop info
     FunToDTMap funToDTMap;					///< map a function to its dominator tree

@@ -2,8 +2,21 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Copyright (C) <2013-2016>  <Yulei Sui>
+// Copyright (C) <2013-2016>  <Jingling Xue>
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //===----------------------------------------------------------------------===//
 
@@ -56,10 +69,10 @@ PAG* PAGBuilder::build(llvm::Module& module) {
             /// To be noted, we do not record arguments which are in declared function without body
             if(!analysisUtil::isExtCall(&fun)) {
                 pag->setCurrentLocation(NULL,&fun.getEntryBlock());
-                NodeID argValNodeId = pag->getValueNode(I);
+                NodeID argValNodeId = pag->getValueNode(&*I);
                 // if this is the function does not have caller (e.g. main)
                 // or a dead function, we may create a black hole address edge for it
-                if(analysisUtil::ArgInNoCallerFunction(I)) {
+                if(analysisUtil::ArgInNoCallerFunction(&*I)) {
                     if(I->getType()->isPointerTy())
                         pag->addBlackHoleAddrEdge(argValNodeId);
                 }
@@ -253,7 +266,7 @@ void PAGBuilder::visitGlobal(llvm::Module& module) {
     /// initialize global variable
     for (Module::global_iterator I = module.global_begin(), E =
                 module.global_end(); I != E; ++I) {
-        GlobalVariable * gvar = I;
+        GlobalVariable * gvar = &*I;
         NodeID idx = getValueNode(gvar);
         NodeID obj = getObjectNode(gvar);
         pag->addAddrEdge(obj, idx);
@@ -268,7 +281,7 @@ void PAGBuilder::visitGlobal(llvm::Module& module) {
     /// initialize global functions
     for (Module::iterator I = module.begin(), E =
                 module.end(); I != E; ++I) {
-        Function * fun = I;
+        Function * fun = &*I;
         NodeID idx = getValueNode(fun);
         NodeID obj = getObjectNode(fun);
 
@@ -563,7 +576,7 @@ void PAGBuilder::handleDirectCall(CallSite cs, const Function *F) {
             DBOUT(DPAGBuild, outs() << " !! not enough args\n");
             break;
         }
-        const Value *AA = *itA, *FA = itF; //current actual/formal arg
+        const Value *AA = *itA, *FA = &*itF; //current actual/formal arg
         //Non-ptr formal args don't need constraints.
         if (!isa<PointerType>(FA->getType()))
             continue;
