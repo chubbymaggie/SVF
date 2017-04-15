@@ -30,6 +30,7 @@
 #include "MemoryModel/MemModel.h"
 #include "MemoryModel/LocMemModel.h"
 #include "Util/AnalysisUtil.h"
+#include "Util/CPPUtil.h"
 #include "Util/BreakConstantExpr.h"
 #include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>
 #include <llvm/Support/raw_ostream.h>	// for output
@@ -55,6 +56,9 @@ static cl::opt<unsigned> maxFieldNumLimit("fieldlimit",  cl::init(10000),
 static cl::opt<bool> LocMemModel("locMM", cl::init(false),
                                  cl::desc("Bytes/bits modeling of memory locations"));
 
+static cl::opt<bool> modelConsts("modelConsts", cl::init(false),
+                                 cl::desc("Modeling individual constant objects"));
+
 /*!
  * Get the symbol table instance
  */
@@ -64,6 +68,7 @@ SymbolTableInfo* SymbolTableInfo::Symbolnfo() {
             symlnfo = new LocSymTableInfo();
         else
             symlnfo = new SymbolTableInfo();
+        symlnfo->setModelConstants(modelConsts);
     }
     return symlnfo;
 }
@@ -239,14 +244,14 @@ bool SymbolTableInfo::computeGepOffset(const llvm::User *V, LocationSet& ls) {
 /*!
  * Replace fields with flatten fields of T if the number of its fields is larger than msz.
  */
-Size_t SymbolTableInfo::getFields(std::vector<LocationSet>& fields, const llvm::Type* T, Size_t msz)
+u32_t SymbolTableInfo::getFields(std::vector<LocationSet>& fields, const llvm::Type* T, u32_t msz)
 {
     if (!isa<PointerType>(T))
         return 0;
 
     T = T->getContainedType(0);
     const std::vector<FieldInfo>& stVec = SymbolTableInfo::Symbolnfo()->getFlattenFieldInfoVec(T);
-    Size_t sz = stVec.size();
+    u32_t sz = stVec.size();
     if (msz < sz) {
         /// Replace fields with T's flatten fields.
         fields.clear();
@@ -259,38 +264,48 @@ Size_t SymbolTableInfo::getFields(std::vector<LocationSet>& fields, const llvm::
 
 
 /*!
- * Find the max possible offset for an object pointed to by (V).
+ * Find the base type and the max possible offset for an object pointed to by (V).
  */
-std::vector<LocationSet> SymbolTableInfo::getFlattenedFields(const Value *V) {
+const Type *SymbolTableInfo::getBaseTypeAndFlattenedFields(const Value *V, std::vector<LocationSet> &fields) {
     assert(V);
-    std::vector<LocationSet> fields;
     fields.push_back(LocationSet(0));
 
     const Type *T = V->getType();
     // Use the biggest struct type out of all operands.
     if (const User *U = dyn_cast<User>(V)) {
-        Size_t msz = 1;		//the max size seen so far
+        u32_t msz = 1;      //the max size seen so far
+        // In case of BitCast, try the target type itself
+        if (isa<BitCastInst>(V)) {
+            u32_t sz = getFields(fields, T, msz);
+            if (msz < sz) {
+                msz = sz;
+            }
+        }
+        // Try the types of all operands
         for (User::const_op_iterator it = U->op_begin(), ie = U->op_end();
                 it != ie; ++it) {
-            T = it->get()->getType();
+            const Type *operandtype = it->get()->getType();
 
-            Size_t sz = getFields(fields, T, msz);
-            if (msz < sz)
+            u32_t sz = getFields(fields, operandtype, msz);
+            if (msz < sz) {
                 msz = sz;
+                T = operandtype;
+            }
         }
     }
-    //If V is a CE or bitcast, the actual pointer type is its operand.
-    else if (isa<ConstantExpr>(V) || isa<BitCastInst>(V)) {
-
-        if (const ConstantExpr *E = dyn_cast<ConstantExpr>(V))
-            T = E->getOperand(0)->getType();
-        else if (const BitCastInst *BI = dyn_cast<BitCastInst>(V))
-            T = BI->getOperand(0)->getType();
-
+    // If V is a CE, the actual pointer type is its operand.
+    else if (const ConstantExpr *E = dyn_cast<ConstantExpr>(V)) {
+        T = E->getOperand(0)->getType();
+        getFields(fields, T, 0);
+    }
+    // Handle Argument case
+    else if (isa<Argument>(V)) {
         getFields(fields, T, 0);
     }
 
-    return fields;
+    while (const PointerType *ptype = dyn_cast<PointerType>(T))
+        T = ptype->getElementType();
+    return T;
 }
 
 /*!
@@ -398,7 +413,7 @@ void ObjTypeInfo::init(const Value* val) {
     }
     else if(isa<GlobalVariable>(val)) {
         setFlag(GLOBVAR_OBJ);
-        if(cast<GlobalVariable>(val)->isConstant())
+        if(SymbolTableInfo::Symbolnfo()->isConstantObjSym(val))
             setFlag(CONST_OBJ);
         analyzeGlobalStackObjType(val);
         objSize = getObjSize(val);
@@ -473,7 +488,7 @@ bool ObjTypeInfo::isNonPtrFieldObj(const LocationSet& ls)
             //       as we simply return new offset by mod operation without checking its
             //       correctness in LocSymTableInfo::getModulusOffset(). So the following
             //       assertion may fail. Try to refine the new memory model.
-            assert(ls.getOffset() == 0 && "cannot get a field from a non-struct type");
+            //assert(ls.getOffset() == 0 && "cannot get a field from a non-struct type");
             return (hasPtrObj() == false);
         }
     }
@@ -621,6 +636,7 @@ void SymbolTableInfo::buildMemModel(llvm::Module& module) {
     for (Module::alias_iterator I = module.alias_begin(), E =
                 module.alias_end(); I != E; I++) {
         collectSym(&*I);
+        collectSym((*I).getAliasee());
     }
 
     // Add symbols for all of the functions and the instructions in them.
@@ -721,23 +737,21 @@ void SymbolTableInfo::collectSym(const llvm::Value *val) {
 
     //TODO: filter the non-pointer type // if (!isa<PointerType>(val->getType()))  return;
 
-    const Value* ref = analysisUtil::stripConstantCasts(val);
-
-    DBOUT(DMemModel, outs() << "collect sym from ##" << *ref << " \n");
+    DBOUT(DMemModel, outs() << "collect sym from ##" << *val << " \n");
 
     // special sym here
-    if (isNullPtrSym(ref) || isBlackholeSym(ref))
+    if (isNullPtrSym(val) || isBlackholeSym(val))
         return;
 
     //TODO handle constant expression value here??
-    handleCE(ref);
+    handleCE(val);
 
     // create a value sym
-    collectVal(ref);
+    collectVal(val);
 
     // create an object If it is a heap, stack, global, function.
-    if (isObject(ref)) {
-        collectObj(ref);
+    if (isObject(val)) {
+        collectObj(val);
     }
 }
 
@@ -766,7 +780,7 @@ void SymbolTableInfo::collectObj(const llvm::Value *val) {
     if (iter == objSymMap.end()) {
         // if the object pointed by the pointer is a constant object (e.g. string)
         // then we treat them as one ConstantObj
-        if(isConstantObjSym(val)) {
+        if(isConstantObjSym(val) && !getModelConstants()) {
             objSymMap.insert(std::make_pair(val, constantSymID()));
         }
         // otherwise, we will create an object for each abstract memory location
@@ -833,7 +847,23 @@ bool SymbolTableInfo::isBlackholeSym(const Value *val) {
  */
 bool SymbolTableInfo::isConstantObjSym(const Value *val) {
     if (const GlobalVariable* v = dyn_cast<GlobalVariable>(val)) {
-        return v->isConstant();
+        if (cppUtil::isValVtbl(const_cast<GlobalVariable*>(v)))
+            return false;
+        else if (!v->hasInitializer())
+            return true;
+        else {
+            StInfo *stInfo = getStructInfo(v->getInitializer()->getType());
+            const std::vector<FieldInfo> &fields = stInfo->getFlattenFieldInfoVec();
+            for (std::vector<FieldInfo>::const_iterator it = fields.begin(), eit = fields.end(); it != eit; ++it) {
+                const FieldInfo &field = *it;
+                const Type *elemTy = field.getFlattenElemTy();
+                assert(!isa<FunctionType>(elemTy) && "Initializer of a global is a function?");
+                if (isa<PointerType>(elemTy))
+                    return false;
+            }
+
+            return v->isConstant();
+        }
     }
     return false;
 }
@@ -843,8 +873,7 @@ bool SymbolTableInfo::isConstantObjSym(const Value *val) {
  * Handle constant expression
  */
 void SymbolTableInfo::handleCE(const Value *val) {
-    if (const Constant* conVal = dyn_cast<Constant>(val)) {
-        const Value* ref = stripConstantCasts(conVal);
+    if (const Constant* ref = dyn_cast<Constant>(val)) {
         if (const ConstantExpr* ce = isGepConstantExpr(ref)) {
             DBOUT(DMemModelCE,
                   outs() << "handle constant expression " << *ref << "\n");
@@ -853,6 +882,24 @@ void SymbolTableInfo::handleCE(const Value *val) {
             // handle the recursive constant express case
             // like (gep (bitcast (gep X 1)) 1); the inner gep is ce->getOperand(0)
             handleCE(ce->getOperand(0));
+        } else if (const ConstantExpr* ce = isCastConstantExpr(ref)) {
+            DBOUT(DMemModelCE,
+                  outs() << "handle constant expression " << *ref << "\n");
+            collectVal(ce);
+            collectVal(ce->getOperand(0));
+            // handle the recursive constant express case
+            // like (gep (bitcast (gep X 1)) 1); the inner gep is ce->getOperand(0)
+            handleCE(ce->getOperand(0));
+        } else if (const ConstantExpr* ce = isSelectConstantExpr(ref)) {
+            DBOUT(DMemModelCE,
+                  outs() << "handle constant expression " << *ref << "\n");
+            collectVal(ce);
+            collectVal(ce->getOperand(0));
+            collectVal(ce->getOperand(1));
+            // handle the recursive constant express case
+            // like (gep (bitcast (gep X 1)) 1); the inner gep is ce->getOperand(0)
+            handleCE(ce->getOperand(0));
+            handleCE(ce->getOperand(1));
         }
         // remember to handle the constant bit cast opnd after stripping casts off
         else {
@@ -903,12 +950,11 @@ void SymbolTableInfo::handleGlobalInitializerCE(const Constant *C,
         u32_t offset) {
 
     if (C->getType()->isSingleValueType() && isa<PointerType>(C->getType())) {
-        const Value *C1 = stripConstantCasts(C);
-        if (const ConstantExpr *E = dyn_cast<ConstantExpr>(C1)) {
+        if (const ConstantExpr *E = dyn_cast<ConstantExpr>(C)) {
             handleCE(E);
         }
         else {
-            collectVal(C1);
+            collectVal(C);
         }
     } else if (isa<ConstantArray>(C)) {
         for (u32_t i = 0, e = C->getNumOperands(); i != e; i++) {

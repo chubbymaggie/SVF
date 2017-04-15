@@ -30,7 +30,7 @@
 #ifndef ANDERSENMEMSSA_H_
 #define ANDERSENMEMSSA_H_
 
-#include "MSSA/SVFG.h"
+#include "MSSA/SVFGOPT.h"
 #include <llvm/Analysis/DominanceFrontier.h>
 
 /*!
@@ -60,14 +60,23 @@ public:
     typedef SVFG::SVFGEdgeSetTy SVFGEdgeSet;
 
     /// Constructor
-    SVFGBuilder(): svfg(NULL) {}
+    SVFGBuilder(bool _SVFGWithIndCall = false): svfg(NULL), SVFGWithIndCall(_SVFGWithIndCall) {}
 
     /// Destructor
     virtual ~SVFGBuilder() {}
 
-    /// We start from here
-    virtual bool build(SVFG* graph,BVDataPTAImpl* pta);
+    static SVFGOPT* globalSvfg;
 
+    /// Create a DDA SVFG. By default actualOut and FormalIN are removed, unless withAOFI is set true.
+    SVFGOPT* buildSVFG(BVDataPTAImpl* pta, bool withAOFI = false);
+
+    /// Clean up
+    static void releaseSVFG() {
+        if (globalSvfg)
+            delete globalSvfg;
+        globalSvfg = NULL;
+    }
+    /// Get SVFG instance
     inline SVFG* getSVFG() const {
         return svfg;
     }
@@ -83,7 +92,11 @@ public:
     }
 
 protected:
+    /// We start from here
+    virtual bool build(SVFG* graph,BVDataPTAImpl* pta);
+    /// Can be rewritten by subclasses
     virtual void createSVFG(MemSSA* mssa, SVFG* graph);
+    /// Release global SVFG
     virtual void releaseMemory(SVFG* graph);
     /// Update call graph using pre-analysis points-to results
     virtual void updateCallGraph(PointerAnalysis* pta);
@@ -91,6 +104,8 @@ protected:
     /// SVFG Edges connected at indirect call/ret sites
     SVFGEdgeSet vfEdgesAtIndCallSite;
     SVFG* svfg;
+    /// SVFG with precomputed indirect call edges
+    bool SVFGWithIndCall;
 };
 
 #endif /* ANDERSENMEMSSA_H_ */

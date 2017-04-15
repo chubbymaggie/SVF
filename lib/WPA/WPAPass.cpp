@@ -65,6 +65,9 @@ static cl::bits<WPAPass::AliasCheckRule> AliasRule(cl::desc("Select alias check 
             clEnumValN(WPAPass::Veto, "veto", "return NoAlias if any pta says no alias"),
             clEnumValEnd));
 
+cl::opt<bool> anderSVFG("svfg", cl::init(false),
+                        cl::desc("Generate SVFG after Andersen's Analysis"));
+
 /*!
  * Destructor
  */
@@ -123,6 +126,11 @@ void WPAPass::runPointerAnalysis(llvm::Module& module, u32_t kind)
 
     ptaVector.push_back(_pta);
     _pta->analyze(module);
+    if (anderSVFG) {
+        SVFGBuilder memSSA(true);
+        SVFG *svfg = memSSA.buildSVFG((BVDataPTAImpl*)_pta);
+        svfg->dump("ander_svfg");
+    }
 }
 
 
