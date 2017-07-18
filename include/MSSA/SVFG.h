@@ -135,6 +135,7 @@ public:
 
     /// Clear MSSA
     inline void clearMSSA() {
+        delete mssa;
         mssa = NULL;
     }
 
@@ -633,6 +634,7 @@ struct GraphTraits<Inverse<SVFGNode *> > : public GraphTraits<Inverse<GenericNod
 };
 
 template<> struct GraphTraits<SVFG*> : public GraphTraits<GenericGraph<SVFGNode,SVFGEdge>* > {
+  typedef SVFGNode *NodeRef;
 };
 }
 

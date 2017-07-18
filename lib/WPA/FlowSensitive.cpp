@@ -62,7 +62,7 @@ void FlowSensitive::analyze(llvm::Module& module) {
     /// Start solving constraints
     DBOUT(DGENERAL, llvm::outs() << analysisUtil::pasMsg("Start Solving Constraints\n"));
 
-    callGraphSCC = new CallGraphSCC(getPTACallGraph());
+    //callGraphSCC = new CallGraphSCC(getPTACallGraph());
 
     do {
         numOfIteration++;
@@ -126,7 +126,7 @@ NodeStack& FlowSensitive::SCCDetect()
 void FlowSensitive::processNode(NodeID nodeId) {
     SVFGNode* node = svfg->getSVFGNode(nodeId);
     if (processSVFGNode(node))
-        propagate(node);
+        propagate(&node);
 
     clearAllDFOutVarFlag(node);
 }

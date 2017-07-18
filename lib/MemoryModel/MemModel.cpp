@@ -32,6 +32,7 @@
 #include "Util/AnalysisUtil.h"
 #include "Util/CPPUtil.h"
 #include "Util/BreakConstantExpr.h"
+#include "Util/GEPTypeBridgeIterator.h" // include bridge_gep_iterator 
 #include <llvm/Transforms/Utils/UnifyFunctionExitNodes.h>
 #include <llvm/Support/raw_ostream.h>	// for output
 #include <llvm/IR/ValueSymbolTable.h>	// for valueSymbolTable
@@ -187,15 +188,14 @@ void SymbolTableInfo::collectSimpleTypeInfo(const llvm::Type* ty)
  */
 bool SymbolTableInfo::computeGepOffset(const llvm::User *V, LocationSet& ls) {
     assert(V);
-    for (gep_type_iterator gi = gep_type_begin(*V), ge = gep_type_end(*V);
+    for (bridge_gep_iterator gi = bridge_gep_begin(*V), ge = bridge_gep_end(*V);
             gi != ge; ++gi) {
 
         // Handling array types, skipe array handling here
         // We treat whole array as one, then we can distinguish different field of an array of struct
         // e.g. s[1].f1 is differet from s[0].f2
         if(isa<ArrayType>(*gi))
-            continue;
-
+	  continue;
 
         //The int-value object of the current index operand
         //  (may not be constant for arrays).
@@ -225,8 +225,7 @@ bool SymbolTableInfo::computeGepOffset(const llvm::User *V, LocationSet& ls) {
 
 
         // Handling struct here
-
-        if (const StructType *ST = dyn_cast<StructType>(*gi)) {
+        if (const StructType *ST = dyn_cast<StructType>(*gi) ) {
             assert(op && "non-const struct index in GEP");
             const vector<u32_t> &so = SymbolTableInfo::Symbolnfo()->getStructOffsetVec(ST);
             if ((unsigned)idx >= so.size()) {
@@ -548,24 +547,30 @@ void MemObj::init() {
  * Initial the memory object here
  */
 void MemObj::init(const Value *val) {
+    const PointerType *refTy = NULL;
 
-    /// Only create objects which pointed by the Pointer Type?
-    if (const PointerType * refty = dyn_cast<PointerType>(val->getType())) {
-        Type* objty = refty->getElementType();
+    const Instruction *I = dyn_cast<Instruction>(val);
 
+    // We consider two types of objects:
+    // (1) A heap/static object from a callsite
+    if (I && isCallSite(I))
+        refTy = getRefTypeOfHeapAllocOrStatic(I);
+    // (2) Other objects (e.g., alloca, global, etc.)
+    else
+        refTy = dyn_cast<PointerType>(val->getType());
+
+    if (refTy) {
+        Type *objTy = refTy->getElementType();
         if(LocMemModel)
-            typeInfo = new LocObjTypeInfo(val, objty, maxFieldNumLimit);
+            typeInfo = new LocObjTypeInfo(val, objTy, maxFieldNumLimit);
         else
-            typeInfo = new ObjTypeInfo(val, objty, maxFieldNumLimit);
+            typeInfo = new ObjTypeInfo(val, objTy, maxFieldNumLimit);
         typeInfo->init(val);
     } else {
-        wrnMsg("try to create a non-pointer value at callsite.");
+        wrnMsg("try to create an object with a non-pointer type.");
         wrnMsg(val->getName());
         wrnMsg("(" + getSourceLoc(val) + ")");
-        assert(false && "creation of object pointed by a non-pointer type ");
-        /// FIXME:: check function summary for this handling
-        ///assert(isa<Instruction>(val) && isHeapAllocOrStaticExtCall(cast<Instruction>(val))
-        ///		&& "non-pointer type should only from incorrect library summary!!");
+        assert(false && "Memory object must be held by a pointer-typed ref value.");
     }
 }
 
