@@ -2,8 +2,8 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// Copyright (C) <2013-2016>  <Yulei Sui>
-// Copyright (C) <2013-2016>  <Jingling Xue>
+// Copyright (C) <2013-2017>  <Yulei Sui>
+// 
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -291,6 +291,8 @@ void CHGraph::buildCHGOnBasicBlock(const BasicBlock *B,
                 continue;
             if ((relationType == CONSTRUCTOR && isConstructor(callee)) ||
                     (relationType == DESTRUCTOR && isDestructor(callee))) {
+                if (cs.arg_size() < 1)
+                  continue;
                 const Value *thisPtr = getVCallThisPtr(cs);
                 if (thisPtr != NULL) {
                     struct DemangledName dname = demangle(callee->getName().str());
@@ -548,7 +550,7 @@ const Function *CHGraph::getVirtualFunctionBasedonID(s32_t id) const {
     return NULL;
 }
 
-set<string> CHGraph::getDescendantsName(const string className) const {
+set<string> CHGraph::getDescendantsNames(const string className) const {
     set<string> descendantsName;
     CHNode *classNode = getNode(className);
     if (classNode != NULL) {
@@ -566,6 +568,40 @@ set<string> CHGraph::getDescendantsName(const string className) const {
         }
     }
     return descendantsName;
+}
+
+set<string> CHGraph::getAncestorsNames(const string className) const {
+    set<string> ancestorsName;
+    CHNode *classNode = getNode(className);
+    if (classNode != NULL) {
+        CHNodeSetTy ancestors;
+        if (hasAncestors(className)) {
+            ancestors = getAncestors(className);
+        }
+        ancestors.insert(classNode);
+        for (CHNodeSetTy::const_iterator it = ancestors.begin(),
+                eit = ancestors.end(); it != eit; ++it) {
+            ancestorsName.insert((*it)->getName());
+        }
+    }
+    return ancestorsName;
+}
+
+set<string> CHGraph::getInstancesNames(const string className) const {
+    set<string> instancesName;
+    CHNode *classNode = getNode(className);
+    if (classNode != NULL) {
+        CHNodeSetTy instances;
+        if (hasInstances(className)) {
+            instances = getInstances(className);
+            instances.insert(classNode);
+        }
+        for (CHNodeSetTy::const_iterator it = instances.begin(),
+                eit = instances.end(); it != eit; ++it) {
+            instancesName.insert((*it)->getName());
+        }
+    }
+    return instancesName;
 }
 
 /*
@@ -603,18 +639,20 @@ void CHGraph::analyzeVTables(const Module &M) {
     for (Module::const_global_iterator I = M.global_begin(),
             E = M.global_end(); I != E; ++I) {
         const GlobalValue *globalvalue = dyn_cast<const GlobalValue>(I);
-        if (isValVtbl(globalvalue)) {
-            if (isa<ArrayType>(globalvalue->getValueType()) &&
-                    globalvalue->getNumOperands() > 0) {
+        if (isValVtbl(globalvalue) && globalvalue->getNumOperands() > 0) {
+            const ConstantStruct *vtblStruct =
+                dyn_cast<ConstantStruct>(globalvalue->getOperand(0));
+            assert(vtblStruct && "Initializer of a vtable not a struct?");
 
-                string vtblClassName = getClassNameFromVtblVal(globalvalue);
-                CHNode *node = getOrCreateNode(vtblClassName);
+            string vtblClassName = getClassNameFromVtblVal(globalvalue);
+            CHNode *node = getOrCreateNode(vtblClassName);
 
-                node->setVTable(globalvalue);
+            node->setVTable(globalvalue);
 
+            for (int ei = 0; ei < vtblStruct->getNumOperands(); ++ei) {
                 const ConstantArray *vtbl =
-                    dyn_cast<ConstantArray>(globalvalue->getOperand(0));
-                assert (vtbl != NULL && "vtable operands not constant array");
+                    dyn_cast<ConstantArray>(vtblStruct->getOperand(ei));
+                assert(vtbl && "Element of initializer not an array?");
 
                 /*
                  * items in vtables can be classified into 3 categories:
@@ -1013,7 +1051,7 @@ void CHGraph::filterVtblsBasedonCHA(CallSite cs,
                                     CHNodeSetTy &targetClasses) const {
     std::string classNameOfThisPtr = getClassNameOfThisPtr(cs);
     std::set<std::string> descendantNames =
-        getDescendantsName(classNameOfThisPtr);
+        getDescendantsNames(classNameOfThisPtr);
     descendantNames.insert(classNameOfThisPtr);
 
     for (std::set<const llvm::Value*>::iterator it = vtbls.begin(),

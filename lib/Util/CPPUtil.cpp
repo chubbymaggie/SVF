@@ -2,8 +2,8 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// Copyright (C) <2013-2016>  <Yulei Sui>
-// Copyright (C) <2013-2016>  <Jingling Xue>
+// Copyright (C) <2013-2017>  <Yulei Sui>
+// 
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -311,8 +311,8 @@ bool cppUtil::isConstructor(const Function *F) {
     } else {
         dname.className = getBeforeBrackets(dname.className.substr(colon+2));
     }
-    if (dname.className.size() > 0 && dname.funcName.size() > 0 &&
-            dname.className.compare(dname.funcName) == 0)
+    if ((dname.className.size() > 0 && dname.className.compare(dname.funcName) == 0)
+    		|| (dname.funcName.size() == 0) ) /// on mac os function name is an empty string after demangling
         return true;
     else
         return false;

@@ -2,8 +2,8 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// Copyright (C) <2013-2016>  <Yulei Sui>
-// Copyright (C) <2013-2016>  <Jingling Xue>
+// Copyright (C) <2013-2017>  <Yulei Sui>
+// 
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -205,7 +205,9 @@ public:
     const CHNodeSetTy &getDescendants(const std::string className) const;
     const CHNodeSetTy &getAncestors(const std::string name) const;
     const CHNodeSetTy &getInstances(const std::string name) const;
-    std::set<std::string> getDescendantsName(const std::string className) const;
+    std::set<std::string> getDescendantsNames(const std::string className) const;
+    std::set<std::string> getAncestorsNames(const std::string className) const;
+    std::set<std::string> getInstancesNames(const std::string className) const;
     void readInheritanceMetadataFromModule(const llvm::Module &M);
     void analyzeVTables(const llvm::Module &M);
     std::string getClassNameOfThisPtr(llvm::CallSite cs) const;

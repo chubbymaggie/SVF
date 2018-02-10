@@ -2,8 +2,8 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// Copyright (C) <2013-2016>  <Yulei Sui>
-// Copyright (C) <2013-2016>  <Jingling Xue>
+// Copyright (C) <2013-2017>  <Yulei Sui>
+// 
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -284,7 +284,7 @@ void PointerAnalysis::dumpAllTypes()
             continue;
 
         outs() << "##<" << node->getValue()->getName() << "> ";
-        outs() << "Souce Loc: " << getSourceLoc(node->getValue());
+        outs() << "Source Loc: " << getSourceLoc(node->getValue());
         outs() << "\nNodeID " << node->getId() << "\n";
 
         llvm::Type* type = node->getValue()->getType();
@@ -497,7 +497,7 @@ void PointerAnalysis::dumpPts(NodeID ptr, const PointsTo& pts) {
         outs() << "##<Dummy Obj > id:" << node->getId();
     } else if (!isa<DummyValPN>(node)) {
         outs() << "##<" << node->getValue()->getName() << "> ";
-        outs() << "Souce Loc: " << getSourceLoc(node->getValue());
+        outs() << "Source Loc: " << getSourceLoc(node->getValue());
     }
     outs() << "\nPtr " << node->getId() << " ";
 
@@ -526,7 +526,7 @@ void PointerAnalysis::dumpPts(NodeID ptr, const PointsTo& pts) {
             outs() << "Dummy Obj id: " << node->getId() << "]\n";
         else {
             outs() << "<" << pagNode->getValue()->getName() << "> ";
-            outs() << "Souce Loc: " << getSourceLoc(pagNode->getValue()) << "] \n";
+            outs() << "Source Loc: " << getSourceLoc(pagNode->getValue()) << "] \n";
         }
     }
 }

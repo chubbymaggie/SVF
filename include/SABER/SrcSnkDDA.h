@@ -2,8 +2,8 @@
 //
 //                     SVF: Static Value-Flow Analysis
 //
-// Copyright (C) <2013-2016>  <Yulei Sui>
-// Copyright (C) <2013-2016>  <Jingling Xue>
+// Copyright (C) <2013-2017>  <Yulei Sui>
+// 
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -144,7 +144,7 @@ public:
     virtual void initSnks() = 0;
     virtual bool isSourceLikeFun(const llvm::Function* fun) = 0;
     virtual bool isSinkLikeFun(const llvm::Function* fun) = 0;
-    virtual bool isSouce(const SVFGNode* node) = 0;
+    virtual bool isSource(const SVFGNode* node) = 0;
     virtual bool isSink(const SVFGNode* node) = 0;
     ///@}
 
