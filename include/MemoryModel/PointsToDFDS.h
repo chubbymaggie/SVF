@@ -3,7 +3,7 @@
 //                     SVF: Static Value-Flow Analysis
 //
 // Copyright (C) <2013-2017>  <Yulei Sui>
-// 
+//
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -200,7 +200,7 @@ public:
         PTData<Key,Data>::dumpPts(this->ptsMap);
         /// dump points-to of address-taken variables
         std::error_code ErrInfo;
-        llvm::tool_output_file F("svfg_pts.data", ErrInfo, llvm::sys::fs::F_None);
+        llvm::ToolOutputFile F("svfg_pts.data", ErrInfo, llvm::sys::fs::F_None);
         if (!ErrInfo) {
             llvm::raw_fd_ostream & osm = F.os();
             NodeBS locs;

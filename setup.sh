@@ -5,7 +5,7 @@ echo "Setting up environment for PTA"
 # Please change LLVM_OBJ_ROOT before using it
 ########
 
-export LLVM_OBJ_ROOT=/home/ysui/llvm-4.0.0/llvm-4.0.0.obj
+export LLVM_OBJ_ROOT=/home/ysui/llvm-6.0.0/llvm-6.0.0.obj
 
 export PATH=$LLVM_OBJ_ROOT/bin:$PATH
 export LLVM_DIR=$LLVM_OBJ_ROOT
@@ -47,7 +47,7 @@ export PTALIB=$PTAHOME/$Build/lib
 export PTARTLIB=$PTAHOME/lib/RuntimeLib
 export PATH=$PTABIN:$PATH
 
-export PTATEST=$PTAHOME/tests
+export PTATEST=$PTAHOME/PTABen
 export PTATESTSCRIPTS=$PTATEST/scripts
 export RUNSCRIPT=$PTATESTSCRIPTS/run.sh
 
